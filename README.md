@@ -1,1 +1,1 @@
-# Project-ClusteringAnalysis-SilhouetteEvaluation
+This GitHub repository encapsulates a thorough exploratory analysis and clustering assessment of a seed dataset. Leveraging R, the project delves into several key questions, each contributing to a comprehensive understanding of the dataset and the efficacy of clustering algorithms.
