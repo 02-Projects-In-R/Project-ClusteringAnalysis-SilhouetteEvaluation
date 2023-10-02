@@ -1,0 +1,398 @@
+# Project: Clustering Analysis and Silhouette Evaluation
+
+--> QUESTION 1:
+
+**Perform exploratory analysis of the dataset – be as thorough as you can given the time allotted. Check for missing values/data by writing R code and producing suitable output and NOT by looking at data using your eyes.  How do you check if the variables are correlated? 
+
+Reading the data:
+
+
+```{r}
+df <- read.csv('seeds.csv')
+head(df)
+```
+
+```{r}
+summary(df)
+```
+
+```{r}
+sum(is.na(df))
+```
+
+```{r}
+dim(df)
+```
+
+```{r}
+unique(df$Type)
+```
+
+
+In this dataset we have 8 variables (7 numerical and 1 categorical) and 210 observations, we can see through the summary() function and the sum(is.na(df)) function that our data does not have any missing value. The type variable is our ground truth which has 3 levels or clusters.
+
+--> Data distribution:
+
+```{r}
+library(packHV)
+for (x in names(df[, c(1:7)])) {
+  hist_boxplot(df[[x]],col="lightblue",freq=TRUE,  xlab = x,main = paste("Histogram of", x))
+} 
+```
+
+By examining these histograms, we can discern the distribution characteristics of all variables. Notably, the following variables exhibit right-skewed distributions:
+
+- V1
+- V2
+- V4
+- V6
+- V7
+
+In contrast, the variable 'V3' displays a left-skewed distribution. Lastly, the variable 'v5' appears to be nearly symmetric.
+
+** Interpretation about outliers:
+
+Our data reveals the presence of outliers, which are noticeable in the following variables:
+
+- v3
+- v6
+
+--> Correlation:
+
+We will verify if our numerical variables are correlated using heatmap and adding the Pearson's correlation coefficient as follows:
+
+```{r}
+df_num <- df[, c(1:7)]
+```
+
+
+```{r}
+library(RColorBrewer)
+library(gplots)
+# Creating the correlation matrix
+cor_matrix <- cor(df_num)
+rounded_cor_matrix <- round(cor_matrix, 2)
+
+# Defining the color
+col_side_colors <- rep(c('blue', 'pink'), length.out = ncol(rounded_cor_matrix))
+row_side_colors <- rep(c('purple', 'orange'), length.out = nrow(rounded_cor_matrix))
+color_gradient <- brewer.pal(11,"Spectral")
+
+# Creating the heatmap
+heatmap.2(rounded_cor_matrix, scale = "none", col = color_gradient, cellnote = rounded_cor_matrix,
+          RowSideColors = row_side_colors,
+          ColSideColors = col_side_colors,
+          trace = 'none', key = TRUE, cexRow = 1.0, cexCol = 1.0, main = 'Seed Types Correlation Heatmap')
+```
+
+We can use the GGally package to see the correlation coefficient based on each type of seed and the scatterplot that shows visually how linear is the correlation of the variables:
+
+```{r}
+library("ggplot2")
+library("GGally")
+cor_df <- ggpairs(df_num, aes(color = df$Type, alpha = 0.5), 
+                        upper = list(continuous = wrap("cor", size = 2.5)), 
+                        progress = FALSE)
+
+cor_df + theme(strip.text.x = element_text(size = 7),
+           strip.text.y = element_text(size = 7))
+```
+The plots above display Pearson's correlation coefficients for the variables. The interpretation of the results is as follows:
+
+- Strong correlation: When the absolute value of the correlation coefficient (|r|) is greater than 0.7.
+- Moderate correlation: When the absolute value of the correlation coefficient (|r|) is between 0.3 and 0.7.
+- Weak correlation: When the absolute value of the correlation coefficient (|r|) is between 0 and 0.3.
+
+Based on the table above, we can observe the strength of correlations between different pairs of variables. The coefficients falling within the specified ranges indicate the level of linear association between the variables:
+
+Strong correlation (positive): 
+- V1 and V2 (0.99)
+- V1 and V4 (0.95)
+- V1 and V5 (0.97)
+- V1 and V7 (0.86)
+- V2 and V4 (0.97)
+- V2 and V5 (0.94)
+- V2 and V7 (0.89)
+- v4 and V5 (0.86)
+- V4 and V7 (0.93)
+
+Moderate correlation (negative):
+- v3 and V1 (0.60)
+- V3 and V2 (0.52)
+- v4 and V3 (0.36)
+- V3 and V5 (0.76)
+- V7 and V5 (0.74)
+
+Weak correlation:
+- v6 and V1, V2, V3 V4, V5 (Negative weak correlation between -0.2 and -0.3)
+- V6 and V7 (-0.01)
+
+--> QUESTION 2:
+
+** For each of the seven variables, determine if there are any differences among the 3 types/varieties.  You are to interpret what this question means on your own and how best to answer this question.   The more complete your answer, the higher your marks.  Suitable plots should accompany your answer.
+
+To obtain statistics for each type level, we will develop a function that provides a comprehensive summary, encompassing crucial measures such as the minimum, first quartile (Q1), median, mean, third quartile (Q3), and maximum values. Later, we will plot the histogram to have a visual representation of these results:
+
+```{r}
+library(dplyr)
+summary_list <- list()
+
+for (x in names(df_num)){
+  summary_result <- df_num %>%
+    group_by(df$Type) %>%
+    summarise(across(
+      {{x}},
+      list(
+        min = min,
+        q1 = ~ quantile(., 0.25),
+        median = median,
+        mean = mean,
+        q3 = ~ quantile(., 0.75),
+        max = max
+      ),
+      .names = "{.col}_{.fn}"
+    ))
+  
+  summary_list[[x]] <- summary_result
+}
+```
+
+```{r}
+for (x in names(df_num)) {
+  print(summary_list[[x]])
+}
+```
+
+Now, we will create boxplots to visualize easily these results:
+
+```{r}
+library(ggplot2)
+
+par(mfrow = c(1, ncol(df_num)), mar = c(4, 4, 2, 1), oma = c(0, 0, 0, 0))
+
+for (i in 1:(ncol(df_num))) {
+  boxplots <- ggplot(df_num, aes(x = df$Type, y = !!sym(names(df_num)[i]), fill = df$Type)) +
+    geom_boxplot(width = 0.5) +
+    labs(title = names(df_num)[i], y = "Value") +
+    theme_classic() +
+    theme(plot.title = element_text(hjust = 0.5))
+print(boxplots)
+}
+
+```
+
+Among the different seed types (A, B, and C), Type B stands out as having significantly higher values across most variables, as evident from its Q1, median, Q3, and maximum values. However, in the 'V3' column, there is some overlap between A and B, suggesting that they exhibit similar values for this particular characteristic. Additionally, the in the column 'V6' the median, Q3 and max value is higher for the seed C, followed by seed B and lastly seed A.
+
+Additionally, we observe some outliers for seed Type A in almost all variables with exception of the V3 and V5 columns, as well as we encounter some outliers for seed type B in column V4 and V7 and seed C in variable V6.
+
+--> QUESTION 3:
+
+** Run K-means with 3 clusters on the dataset including graphically representing the clusters. (Reason for choosing k = 3 is because there are 3 varieties).   Give reasons whether you should or should not scale the data before running K-means.
+
+We should scale the data before clustering, as the variables in the dataset may have different unit measures. If we do not scale the data, this would result in the V3 variable (in this case) not contributing equally to the clustering process, potentially overshadowed by other variables with higher unit measures during the distance calculation. Scaling ensures that each variable's influence on the clustering algorithm is balanced, enabling us to perform a fair comparison and meaningful interpretation of the results.
+
+```{r}
+df_sc <- scale(df_num)
+```
+
+Performing k-means:
+
+```{r}
+km.res <- kmeans(df_sc, 3, nstart = 25)
+print(km.res)
+```
+
+Graphical representations of the clusters:
+
+```{r}
+library('factoextra')
+fviz_cluster(km.res, data = df_sc,
+             palette = c("#FF6A6A", "#2297E6", "#CD0BBC"),
+             repel = TRUE,
+             ggtheme = theme_minimal(),
+             geom = 'point'
+             )
+```
+
+--> QUESTION 4:
+
+**Perform a test of clustering tendency using the Hopkins statistic and interpret your results. Explain what a score of 0.5 of the Hopkins statistic means.
+
+We can conduct the Hopkins Statistic test iteratively, using 0.5 as the threshold to reject the alternative hypothesis. 
+Ho:The data set Seeds is uniformly distributed(no meaningful cluster)
+Ha: The data set Seeds is not uniformly distributed.Thus, contain meaningful clusters
+
+```{r}
+library('hopkins')
+hop_df <- hopkins(df_sc, m = nrow(df_sc)-1)
+hop_df
+```
+We can reject the null hypothesis and say that the data set Seeds is not uniformly distributed, therefore, it contains meaningful clusters.
+
+As we can see in the H0 hypothesis, Hopkins statistics score of 0.5 means that the variables are uniformly distributed, which represents the variables are close to each other and the clustering result is not meaningful.
+
+--> QUESTION 5:
+
+**Use as many approaches as you know to identify the ideal number of clusters for this dataset when using K-means. Accompany your answer with suitable plots. Your approaches should include internal validation metrics. Which number of clusters is appropriate based on the Dunn’s index?
+
+a. In order to identify the optimal number of clusters in this dataset for K-means we will use the 3 different techniques to find the optimal value of "k": 1) Elbow method, 2) Silhouette width, 3) Gap statistics, 4) Dissimilarity matrix, 5) NbClust() function, 6) Using internal cluster validation
+
+1) Elbow method:
+
+```{r}
+set.seed(123)
+fviz_nbclust(df_sc, kmeans, method = 'wss') +
+  geom_vline(xintercept = 3, linetype = 2) +
+  labs(subtitle = 'Elbow method')
+```
+
+2) Silhouette method:
+
+```{r}
+set.seed(123)
+fviz_nbclust(df_sc, kmeans, method = 'silhouette')+
+  labs(subtitle = 'Silhouette method')
+```
+
+3) Gap statistics:
+
+```{r}
+set.seed(123)
+gap.res <- fviz_nbclust(df_sc, kmeans, method = 'gap_stat', nboot = 500, iter.max=50, verbose = FALSE) +
+  labs(subtitle = 'Gap statistic method')
+gap.res
+```
+
+4) Dissimilarity matrix: To visually examine the clusters
+
+```{r}
+fviz_dist(dist(df_sc), show_labels = FALSE)+
+  labs(title = 'Seed types cluster validation')
+```
+
+5) Using the NbClust() function:
+
+```{r}
+set.seed(123)
+library('NbClust')
+nc_kmeans <- NbClust(data = df_sc, diss = NULL, distance = 'euclidean', min.nc = 2, max.nc = 10, method = 'kmeans', index = 'all')
+```
+
+6) Internal cluster validation:
+
+```{r}
+library(clValid)
+cluster_val <- clValid(df_sc, nClust = 2:10, clMethods = 'kmeans', validation = 'internal')
+optimalScores(cluster_val)
+```
+
+Based on the internal validation clustering to answer the question "Which number of clusters is appropriate based on the Dunn’s index?" we could say that 3 is the appropriated number of clusters based on the Dunn's index.
+
+--> QUESTION 6:
+
+** Use the clustering results from part 3 (where you ran K-means using k =3) for this question.  Using variable “Type” in the data as “ground truth”, assess the external validity of the K-means  using both the Rand’s index and the Adjusted Rand’s index.  Interpret your results.
+
+Adding the clusters to the original dataset:
+
+```{r}
+df_clus <- cbind(df, cluster = km.res$cluster)
+```
+
+Creating one categorical variable Type with integers:
+
+```{r}
+df_clus$cat_num <- ifelse(df_clus$Type == 'A', 2,
+                          ifelse(df_clus$Type == 'B', 1,
+                                 ifelse(df_clus$Type == 'C', 3, NA)))
+head(df_clus)
+```
+
+
+```{r}
+library('EMCluster')
+RRand(df_clus$cluster, df_clus$cat_num)
+```
+
+As observed, the Rand Index result for K-means is 0.899, and the Adjusted Rand Index result is 0.773. These results mean that the two clustering methods (K-means and Ground Truth) agree on the clustering for most of the pair of elements.
+
+--> QUESTION 7:
+
+Part 1: 
+
+**For the entire dataset, how many silhouette scores are negative?  (Use R code to obtain the answer.  For all questions, low/no marks if you provide an answer by manually looking through a list of silhouette scores).  
+
+```{r}
+# Generating the silhouette information
+km_sil <- eclust(df_sc, 'kmeans', k = 3, nstart = 25, graph = FALSE)
+silinfo <- km_sil$silinfo
+```
+
+```{r}
+# Silhouette width of observation
+sil <- silinfo$widths[, 1:3]
+sil_neg <- which(sil[, 'sil_width'] < 0)
+# Objects with negative silhouette
+sil[sil_neg, , drop = FALSE]
+```
+
+
+We can see that in this dataset we do not have any silhouette score negative, we can validate this with the next Cluster silhouette plot:
+
+```{r}
+fviz_silhouette(km_sil, palette = 'jco', ggtheme = theme_classic())
+```
+
+Part 2:
+
+**For the entire dataset, what percentage of the silhouette scores have values that are less than 0.1?
+
+```{r}
+sil_x <- which(sil[, 'sil_width'] < 0.1)
+t_sil <- sil[sil_x, , drop = FALSE]
+head(t_sil)
+```
+
+```{r}
+dim(t_sil)
+```
+Out of a dataset containing 210 silhouette scores, 20 of them have values less than 0.1. This implies that approximately 9.52% of the silhouette scores in the dataset are below the threshold of 0.1.
+
+Part 3:
+
+**For each of the 3 clusters, identify the rows of the dataset that have silhouette scores less than 0.1.
+
+Converting the index rows in a variable in our dataset:
+```{r}
+library(tibble)
+df_sil <- rownames_to_column(t_sil)
+```
+
+```{r}
+library(dplyr)
+library(stringr)
+
+df_sil %>% group_by(cluster) %>% summarise(rowname = str_c('[',toString(rowname),']'))
+```
+
+In the above dataset we can see that the rows 24, 44, 10, 30, 198, 138, 40, 27, 28, 133 belongs to the cluster 1, the rows 38, 135, 101, 123 to the cluster 2 and 206, 60, 180, 196, 64, 62 to the cluster 3.
+
+Part 4:
+
+** What is the average silhouette score (exact to 3 decimal places) for each cluster?
+
+```{r}
+round(silinfo$clus.avg.widths, 3)
+```
+The average silhouette score for each cluster is 0.340, 0.469 and 0.397
+
+Part 5:
+
+** What is the average silhouette score (exact to 3 decimal places) for the entire dataset? 
+
+```{r}
+round(silinfo$avg.width, 3)
+```
+The average silhouette score for the entire dataset is 0.401.
+
+
+
